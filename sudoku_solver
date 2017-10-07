@@ -1,0 +1,112 @@
+#!/usr/bin/env ruby
+
+# Hi I'm Tomasz and today we'll learn how to
+# make computer solve sudokus for us
+
+# For more information check out:
+# https://github.com/taw/z3
+
+# To install Z3:
+# brew install z3
+# gem install z3
+
+# And we can test that it worked with:
+require "z3"
+# puts Z3.version
+
+# Super simple solution
+# solver = Z3::Solver.new
+# solver.assert Z3.Int("a") + Z3.Int("b") == 0.5
+# puts solver.assertions
+# if solver.satisfiable?
+#   puts "There is a solution"
+#   model = solver.model
+#   puts model
+# else
+#   puts "There is no solution"
+# end
+
+# Let's wrap it in a class
+class SudokuSolver
+  def initialize(*values)
+    @values = values.map{|row|
+      row.map{|i|
+        i == "_" ? nil : i.to_i
+      }
+    }
+  end
+
+  def print_solution
+    puts "There is a solution"
+    @model = @solver.model
+    @vars.each_with_index do |row, j|
+      row.each_with_index do |var, i|
+        print @model[var], " "
+        print "| " if i == 2 or i == 5
+      end
+      print "\n"
+      print "-" * 21, "\n" if j == 2 or j == 5
+    end
+  end
+
+  def call
+    @solver = Z3::Solver.new
+    # Create variables
+    @vars = (0..8).map{|y|
+      (0..8).map{|x|
+        Z3.Int("c#{x},#{y}")
+      }
+    }
+    # Make cells match values we know
+    (0..8).each do |x|
+      (0..8).each do |y|
+        var = @vars[y][x]
+        expected = @values[y][x]
+        next unless expected
+        @solver.assert var == expected
+      end
+    end
+    # Let's make all of them 1 to 9
+    @vars.flatten.each do |var|
+      @solver.assert var >= 1
+      @solver.assert var <= 9
+    end
+    # Every row has different values
+    @vars.each do |row|
+      @solver.assert Z3.Distinct(*row)
+    end
+    # Every column as different values
+    @vars.transpose.each do |col|
+      @solver.assert Z3.Distinct(*col)
+    end
+    # Squares
+    [0,3,6].each do |xx|
+      [0,3,6].each do |yy|
+        square = @vars[xx, 3].map{|col|
+          col[yy, 3]
+        }.flatten
+        @solver.assert Z3.Distinct(*square)
+      end
+    end
+
+    if @solver.satisfiable?
+      print_solution
+    else
+      puts "There is no solution"
+    end
+  end
+end
+
+SudokuSolver
+  .new(
+    %W[8 1 _ _ 6 _ 9 _ _],
+    %W[9 _ _ _ _ _ _ _ 7],
+    %W[_ _ 2 _ _ 5 _ _ _],
+    %W[1 _ _ _ _ 4 6 _ 9],
+    %W[_ _ _ _ 9 _ _ _ _],
+    %W[2 _ 5 3 _ _ _ _ 1],
+    %W[_ _ _ 5 _ _ 1 _ _],
+    %W[6 _ _ _ _ _ _ _ 4],
+    %W[_ _ 7 _ 3 _ _ 9 8],
+  )
+  .call
